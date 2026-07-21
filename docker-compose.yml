@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: mukund
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: curriculum_rl
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  celery:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A trainer.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://mukund:password@db:5432/curriculum_rl
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - models_data:/app/models
+    depends_on:
+      - db
+      - redis
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://mukund:password@db:5432/curriculum_rl
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - models_data:/app/models
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
+  models_data:

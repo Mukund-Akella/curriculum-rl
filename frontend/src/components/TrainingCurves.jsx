@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import Panel from "./Panel";
-import { useCSV } from "../hooks/useCSV";
+import Spinner from "./Spinner";
 
 const ROLLING_WINDOW = 10;
 
@@ -51,62 +51,40 @@ function rollingSuccessRate(rows) {
   return rates;
 }
 
-function buildMergedData(curriculum, baseline) {
-  const curriculumRate = rollingSuccessRate(curriculum);
-  const baselineRate = rollingSuccessRate(baseline);
-  const length = Math.min(curriculum.length, baseline.length);
-  const merged = [];
-  for (let i = 0; i < length; i++) {
-    merged.push({
-      episode: i + 1,
-      curriculum_episode_length: curriculum[i].episode_length,
-      curriculum_reward: curriculum[i].reward,
-      curriculum_success_rate: curriculumRate[i],
-      curriculum_difficulty: curriculum[i].difficulty,
-      baseline_episode_length: baseline[i].episode_length,
-      baseline_reward: baseline[i].reward,
-      baseline_success_rate: baselineRate[i],
-    });
-  }
-  return merged;
+function buildData(episodes) {
+  const rates = rollingSuccessRate(episodes);
+  return episodes.map((ep, i) => ({
+    episode: ep.episode_number,
+    episode_length: ep.episode_length,
+    reward: ep.reward,
+    success_rate: rates[i],
+    difficulty: ep.difficulty,
+  }));
 }
 
-function findPromotions(curriculum) {
+function findPromotions(rows) {
   const promotions = [];
-  for (let i = 1; i < curriculum.length; i++) {
-    if (curriculum[i].difficulty > curriculum[i - 1].difficulty) {
-      promotions.push({ episode: i + 1, level: curriculum[i].difficulty });
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i].difficulty > rows[i - 1].difficulty) {
+      promotions.push({ episode: rows[i].episode, level: rows[i].difficulty });
     }
   }
   return promotions;
 }
 
-export default function TrainingCurves() {
-  const { data: curriculum, error: curriculumError } = useCSV(
-    "/training_logs_curriculum.csv",
-  );
-  const { data: baseline, error: baselineError } = useCSV(
-    "/training_logs_baseline.csv",
-  );
+export default function TrainingCurves({ run, episodes, loading, error }) {
   const [metric, setMetric] = useState("episode_length");
 
-  const merged = useMemo(() => {
-    if (!curriculum || !baseline) return null;
-    return buildMergedData(curriculum, baseline);
-  }, [curriculum, baseline]);
-
-  const promotions = useMemo(
-    () => (curriculum ? findPromotions(curriculum) : []),
-    [curriculum],
-  );
-
+  const data = useMemo(() => (episodes ? buildData(episodes) : null), [episodes]);
+  const promotions = useMemo(() => (data ? findPromotions(data) : []), [data]);
   const activeMetric = METRICS.find((m) => m.key === metric);
-  const error = curriculumError || baselineError;
+  const seriesColor = run?.run_type === "baseline" ? "#e66767" : "#3987e5";
+  const seriesName = run ? `${run.run_type.charAt(0).toUpperCase()}${run.run_type.slice(1)}` : "";
 
   return (
     <Panel
       title="Training Curves"
-      description="Episode-by-episode performance for curriculum vs. direct (baseline) training, with dashed markers showing where the curriculum agent was promoted to a harder difficulty level."
+      description="Episode-by-episode performance for the selected run, with dashed markers showing where the agent was promoted to a harder difficulty level."
       controls={
         <div className="flex gap-1 rounded-md border border-white/10 bg-[#0d0d0d] p-1">
           {METRICS.map((m) => (
@@ -125,17 +103,21 @@ export default function TrainingCurves() {
         </div>
       }
     >
-      {error && (
-        <p className="text-sm text-[#e66767]">Failed to load training logs.</p>
+      {!run && (
+        <p className="text-sm text-[#898781]">Select a training run to view its curves.</p>
       )}
-      {!error && !merged && (
-        <p className="text-sm text-[#898781]">Loading training logs…</p>
+      {run && error && (
+        <p className="text-sm text-[#e66767]">Failed to load episodes for this run.</p>
       )}
-      {merged && (
+      {run && !error && loading && <Spinner label="Loading episodes…" />}
+      {run && !error && !loading && data && data.length === 0 && (
+        <p className="text-sm text-[#898781]">No episodes recorded yet for this run.</p>
+      )}
+      {run && data && data.length > 0 && (
         <div>
           <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={merged} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2c2c2a" vertical={false} />
               <XAxis
                 dataKey="episode"
@@ -178,18 +160,9 @@ export default function TrainingCurves() {
               ))}
               <Line
                 type="monotone"
-                dataKey={`curriculum_${metric}`}
-                name="Curriculum"
-                stroke="#3987e5"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey={`baseline_${metric}`}
-                name="Baseline (direct)"
-                stroke="#e66767"
+                dataKey={metric}
+                name={seriesName}
+                stroke={seriesColor}
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}

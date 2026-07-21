@@ -11,60 +11,50 @@ import {
   YAxis,
 } from "recharts";
 import Panel from "./Panel";
-import { useCSV } from "../hooks/useCSV";
+import Spinner from "./Spinner";
 
-function buildData(curriculum, baseline) {
-  const length = Math.min(curriculum.length, baseline.length);
-  const data = [];
-  for (let i = 0; i < length; i++) {
-    data.push({
-      episode: i + 1,
-      curriculum_episode_length: curriculum[i].episode_length,
-      baseline_episode_length: baseline[i].episode_length,
-      difficulty: curriculum[i].difficulty,
-    });
-  }
-  return data;
+function buildData(episodes) {
+  return episodes.map((ep) => ({
+    episode: ep.episode_number,
+    episode_length: ep.episode_length,
+    difficulty: ep.difficulty,
+  }));
 }
 
 function findPromotions(rows) {
   const promotions = [];
   for (let i = 1; i < rows.length; i++) {
     if (rows[i].difficulty > rows[i - 1].difficulty) {
-      promotions.push({ episode: i + 1, level: rows[i].difficulty });
+      promotions.push({ episode: rows[i].episode, level: rows[i].difficulty });
     }
   }
   return promotions;
 }
 
-export default function DifficultyProgression() {
-  const { data: curriculum, error: curriculumError } = useCSV(
-    "/training_logs_curriculum.csv",
-  );
-  const { data: baseline, error: baselineError } = useCSV(
-    "/training_logs_baseline.csv",
-  );
-
-  const data = useMemo(
-    () => (curriculum && baseline ? buildData(curriculum, baseline) : null),
-    [curriculum, baseline],
-  );
-  const promotions = useMemo(
-    () => (curriculum ? findPromotions(curriculum) : []),
-    [curriculum],
-  );
-  const error = curriculumError || baselineError;
+export default function DifficultyProgression({ run, episodes, loading, error }) {
+  const data = useMemo(() => (episodes ? buildData(episodes) : null), [episodes]);
+  const promotions = useMemo(() => (data ? findPromotions(data) : []), [data]);
+  const seriesColor = run?.run_type === "baseline" ? "#e66767" : "#3987e5";
+  const seriesName = run
+    ? `${run.run_type.charAt(0).toUpperCase()}${run.run_type.slice(1)} Episode Length`
+    : "Episode Length";
 
   return (
     <Panel
       title="Difficulty Progression"
-      description="Terrain difficulty (right axis, step function) alongside episode length (left axis) for curriculum vs. baseline, showing how survival time responds each time the curriculum agent is promoted to a harder level."
+      description="Terrain difficulty (right axis, step function) alongside episode length (left axis) for the selected run, showing how survival time responds each time the agent is promoted to a harder level."
     >
-      {error && (
-        <p className="text-sm text-[#e66767]">Failed to load training logs.</p>
+      {!run && (
+        <p className="text-sm text-[#898781]">Select a training run to view its difficulty progression.</p>
       )}
-      {!error && !data && <p className="text-sm text-[#898781]">Loading training logs…</p>}
-      {data && (
+      {run && error && (
+        <p className="text-sm text-[#e66767]">Failed to load episodes for this run.</p>
+      )}
+      {run && !error && loading && <Spinner label="Loading episodes…" />}
+      {run && !error && !loading && data && data.length === 0 && (
+        <p className="text-sm text-[#898781]">No episodes recorded yet for this run.</p>
+      )}
+      {run && data && data.length > 0 && (
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 24, right: 16, left: 0, bottom: 0 }}>
@@ -118,19 +108,9 @@ export default function DifficultyProgression() {
               <Line
                 yAxisId="left"
                 type="monotone"
-                dataKey="curriculum_episode_length"
-                name="Curriculum Episode Length"
-                stroke="#3987e5"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="baseline_episode_length"
-                name="Baseline Episode Length"
-                stroke="#e66767"
+                dataKey="episode_length"
+                name={seriesName}
+                stroke={seriesColor}
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
@@ -139,7 +119,7 @@ export default function DifficultyProgression() {
                 yAxisId="right"
                 type="stepAfter"
                 dataKey="difficulty"
-                name="Curriculum Difficulty"
+                name="Difficulty"
                 stroke="#9085e9"
                 strokeWidth={2}
                 dot={false}

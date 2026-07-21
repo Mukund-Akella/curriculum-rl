@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+psycopg2-binary
+redis
+celery
+python-dotenv
+stable-baselines3
+gymnasium
+mujoco
+scipy
+numpy
+websockets
