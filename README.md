@@ -86,6 +86,12 @@ source venv/bin/activate
 pip install mujoco gymnasium stable-baselines3 scipy numpy matplotlib
 ```
 
+Before running `docker-compose up`, copy `.env.example` to `.env` and fill in your own values:
+
+```bash
+cp .env.example .env
+```
+
 ## Running
 
 ```bash
