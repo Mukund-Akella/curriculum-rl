@@ -11,7 +11,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from envs.terrain_env import TerrainEnv
 from curriculum.scheduler import CurriculumScheduler
 
-TOTAL_TIMESTEPS = 50000
+TOTAL_TIMESTEPS = 200000
 LOG_FILE = "logs/training_logs_curriculum.csv"
 
 
