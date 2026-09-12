@@ -129,7 +129,7 @@ class TestCurriculumScheduler:
 # These test that terrain output is valid for MuJoCo
 # ============================================================
 
-from envs.terrain_env import TerrainEnv
+from envs.terrain_env import TerrainEnv, ROBOT_SPAWN_CLEARANCE
 
 class TestTerrainGeneration:
 
@@ -269,3 +269,28 @@ class TestEnvironment:
         """
         self.env.reset()
         assert self.env._is_terminated() == False
+
+    def test_spawn_height_matches_local_terrain(self):
+        """
+        Robot should spawn ROBOT_SPAWN_CLEARANCE above the terrain height at
+        its own (x, y), not at a fixed height regardless of terrain.
+
+        Regression test: a hardcoded spawn height caused the robot to spawn
+        embedded in the terrain whenever the randomly generated terrain was
+        taller than that fixed height, which the contact solver then resolved
+        by pushing the robot straight up out of the ground over many steps —
+        visible as bouncing in place with no lateral movement.
+        """
+        obs, _ = self.env.reset()
+        expected_z = self.env._terrain_height_at(0.0, 0.0) + ROBOT_SPAWN_CLEARANCE
+        assert self.env.data.qpos[2] == pytest.approx(expected_z, abs=1e-6)
+
+    def test_no_deep_penetration_at_spawn(self):
+        """
+        No contact should show significant penetration depth right after
+        reset. A large negative `dist` here means the robot spawned inside
+        the terrain rather than resting on top of it.
+        """
+        self.env.reset()
+        for i in range(self.env.data.ncon):
+            assert self.env.data.contact[i].dist > -0.01
